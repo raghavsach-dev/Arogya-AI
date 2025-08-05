@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, MapPin, Calendar, Clock } from 'lucide-react';
-import { ChatMessage, UserInfo, MedicalService } from '../types';
+import { Send, Bot, User, MapPin, Calendar, Clock, BookOpen, History, X } from 'lucide-react';
+import { ChatMessage, UserInfo, MedicalService, MedicalDetails } from '../types';
 import { GeminiService } from '../services/geminiApi';
+import { MedicalDetailsForm } from './MedicalDetailsForm';
 
 interface ChatInterfaceProps {
   userInfo: UserInfo;
@@ -22,6 +23,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ userInfo, onServic
   const [location, setLocation] = useState('');
   const [showLocationInput, setShowLocationInput] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedService, setSelectedService] = useState<MedicalService | null>(null);
+  const [showMedicalForm, setShowMedicalForm] = useState(false);
+  const [foundServices, setFoundServices] = useState<MedicalService[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const geminiService = new GeminiService();
 
@@ -115,12 +120,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ userInfo, onServic
         const response = await geminiService.searchMedicalServices(location, userInfo);
         
         if (response.type === 'services' && response.data?.services) {
+          setFoundServices(response.data.services);
           addMessage({
             type: 'ai',
             content: `Great! I found ${response.data.services.length} medical services near ${location}. Here are your options:`
           });
 
-          // Display services
+          // Display services with booking buttons
           response.data.services.forEach((service: MedicalService, index: number) => {
             setTimeout(() => {
               addMessage({
@@ -133,7 +139,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ userInfo, onServic
 💰 Starting from ${service.price}
 🕒 Available: ${service.availability.join(', ')}
 
-Would you like to book an appointment here?`
+[BOOK_NOW_BUTTON:${service.id}]`
               });
             }, index * 800);
           });
@@ -154,6 +160,39 @@ Would you like to book an appointment here?`
     }
   };
 
+  const handleBookNow = (serviceId: string) => {
+    const service = foundServices.find(s => s.id === serviceId);
+    if (service) {
+      setSelectedService(service);
+      setShowMedicalForm(true);
+    }
+  };
+
+  const handleMedicalFormComplete = (details: MedicalDetails) => {
+    setShowMedicalForm(false);
+    setSelectedService(null);
+    
+    // Add booking confirmation message
+    addMessage({
+      type: 'ai',
+      content: `✅ **Booking Confirmed!**
+Your appointment has been successfully scheduled at ${selectedService?.name}.
+
+**Appointment Details:**
+📅 Date: ${details.preferredDate}
+🕒 Time: ${details.preferredTime}
+🏥 Service: ${selectedService?.specialty}
+📍 Location: ${selectedService?.address}
+
+You'll receive a confirmation email shortly. Is there anything else I can help you with?`
+    });
+  };
+
+  const handleMedicalFormCancel = () => {
+    setShowMedicalForm(false);
+    setSelectedService(null);
+  };
+
   const formatMessage = (content: string) => {
     const formatLine = (text: string) => {
       // Handle bold text **text**
@@ -168,6 +207,29 @@ Would you like to book an appointment here?`
       return formatted;
     };
 
+    // Check for booking button
+    const bookingButtonMatch = content.match(/\[BOOK_NOW_BUTTON:([^\]]+)\]/);
+    if (bookingButtonMatch) {
+      const serviceId = bookingButtonMatch[1];
+      const service = foundServices.find(s => s.id === serviceId);
+      const contentWithoutButton = content.replace(/\[BOOK_NOW_BUTTON:[^\]]+\]/, '');
+      
+      return (
+        <div>
+          <div dangerouslySetInnerHTML={{ __html: formatLine(contentWithoutButton) }} />
+          {service && (
+            <button
+              onClick={() => handleBookNow(serviceId)}
+              className="mt-3 bg-green-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-green-700 transition-colors duration-200 flex items-center gap-2"
+            >
+              <BookOpen className="w-4 h-4" />
+              Book Now
+            </button>
+          )}
+        </div>
+      );
+    }
+
     return content.split('\n').map((line, index) => {
       const formattedLine = formatLine(line);
       return (
@@ -180,23 +242,78 @@ Would you like to book an appointment here?`
     });
   };
 
+  const clearHistory = () => {
+    setMessages([
+      {
+        id: '1',
+        type: 'ai',
+        content: `Hello ${userInfo.name}! I'm Arogya AI, your personal health assistant. I can help you find medical services, book appointments, or answer health-related questions. How can I assist you today?`,
+        timestamp: new Date()
+      }
+    ]);
+    setShowHistory(false);
+  };
+
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl shadow-lg overflow-hidden">
       {/* Chat Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-            <Bot className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+              <Bot className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">Arogya AI</h3>
+              <p className="text-blue-100 text-sm">Your Health Assistant</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-white font-semibold">Arogya AI</h3>
-            <p className="text-blue-100 text-sm">Your Health Assistant</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="p-2 text-white hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors duration-200"
+              title="Chat History"
+            >
+              <History className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Chat History Sidebar */}
+      {showHistory && (
+        <div className="absolute top-0 left-0 h-full w-80 bg-white border-r border-gray-200 z-10 shadow-lg">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Chat History</h3>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="space-y-3">
+              <div className="text-sm text-gray-600">
+                <p><strong>Total Messages:</strong> {messages.length}</p>
+                <p><strong>User Messages:</strong> {messages.filter(m => m.type === 'user').length}</p>
+                <p><strong>AI Responses:</strong> {messages.filter(m => m.type === 'ai').length}</p>
+              </div>
+              <button
+                onClick={clearHistory}
+                className="w-full bg-red-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-red-700 transition-colors duration-200"
+              >
+                Clear Chat History
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className={`flex-1 overflow-y-auto p-6 space-y-4 ${showHistory ? 'ml-80' : ''}`}>
         {messages.map((message) => (
           <div
             key={message.id}
@@ -315,6 +432,15 @@ Would you like to book an appointment here?`
           </button>
         </div>
       </div>
+
+      {/* Medical Details Form */}
+      {showMedicalForm && selectedService && (
+        <MedicalDetailsForm
+          service={selectedService}
+          onComplete={handleMedicalFormComplete}
+          onCancel={handleMedicalFormCancel}
+        />
+      )}
     </div>
   );
 };

@@ -35,6 +35,15 @@ export interface BookingStep {
   progress: number;
 }
 
+export interface MedicalDetails {
+  symptoms: string;
+  urgency: string;
+  preferredDate: string;
+  preferredTime: string;
+  additionalNotes: string;
+  emergencyContact: string;
+}
+
 export interface GeminiResponse {
   type: 'services' | 'booking' | 'chat' | 'error';
   data?: any;
