@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, MapPin, Calendar, Clock, BookOpen, History, X } from 'lucide-react';
-import { ChatMessage, UserInfo, MedicalService, MedicalDetails } from '../types';
+import { ChatMessage, UserInfo, MedicalService, MedicalDetails, InsurancePolicy, InsuranceDetails } from '../types';
 import { GeminiService } from '../services/geminiApi';
 import { MedicalDetailsForm } from './MedicalDetailsForm';
+import { InsuranceDetailsForm } from './InsuranceDetailsForm';
 
 interface ChatInterfaceProps {
   userInfo: UserInfo;
@@ -27,6 +28,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ userInfo, onServic
   const [selectedService, setSelectedService] = useState<MedicalService | null>(null);
   const [showMedicalForm, setShowMedicalForm] = useState(false);
   const [foundServices, setFoundServices] = useState<MedicalService[]>([]);
+  const [foundPolicies, setFoundPolicies] = useState<InsurancePolicy[]>([]);
+  const [selectedPolicy, setSelectedPolicy] = useState<InsurancePolicy | null>(null);
+  const [showInsuranceForm, setShowInsuranceForm] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const geminiService = new GeminiService();
 
@@ -58,12 +62,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ userInfo, onServic
       content: userMessage
     });
 
+    // Check if user is asking for health insurance FIRST (before medical services)
+    if (userMessage.toLowerCase().includes('insurance') || 
+        userMessage.toLowerCase().includes('policy') || 
+        userMessage.toLowerCase().includes('health insurance') ||
+        userMessage.toLowerCase().includes('coverage') ||
+        userMessage.toLowerCase().includes('premium')) {
+      
+      handleInsuranceSearch();
+      return;
+    }
+
     // Check if user is asking for medical services
-    if (userMessage.toLowerCase().includes('find') || 
+    if ((userMessage.toLowerCase().includes('find') && !userMessage.toLowerCase().includes('insurance')) || 
         userMessage.toLowerCase().includes('book') || 
         userMessage.toLowerCase().includes('appointment') ||
         userMessage.toLowerCase().includes('doctor') ||
-        userMessage.toLowerCase().includes('hospital')) {
+        userMessage.toLowerCase().includes('hospital') ||
+        userMessage.toLowerCase().includes('clinic')) {
       
       setShowLocationInput(true);
       addMessage({
@@ -160,11 +176,89 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ userInfo, onServic
     }
   };
 
+  const handleInsuranceSearch = async () => {
+    setIsSearching(true);
+
+    // Add searching messages with delay
+    const searchSteps = [
+      'Searching for suitable health insurance policies...',
+      'Analyzing your profile and health needs...',
+      'Comparing coverage options and premiums...',
+      'Preparing personalized recommendations...'
+    ];
+
+    for (let i = 0; i < searchSteps.length; i++) {
+      setTimeout(() => {
+        addMessage({
+          type: 'system',
+          content: searchSteps[i]
+        });
+      }, i * 1500);
+    }
+
+    try {
+      setTimeout(async () => {
+        const response = await geminiService.searchInsurancePolicies(userInfo);
+        
+        if (response.type === 'insurance' && response.data?.policies) {
+          setFoundPolicies(response.data.policies);
+          addMessage({
+            type: 'ai',
+            content: `Great! I found ${response.data.policies.length} health insurance policies that match your profile. Here are your options:`
+          });
+
+          // Display policies with choose buttons
+          response.data.policies.forEach((policy: InsurancePolicy, index: number) => {
+            setTimeout(() => {
+              addMessage({
+                type: 'ai',
+                content: `**${policy.name}** by ${policy.provider}
+🛡️ Coverage: ${policy.coverage}
+💰 Premium: ${policy.premium}
+📋 Type: ${policy.type}
+⭐ Rating: ${policy.rating}/5
+⏳ Waiting Period: ${policy.waitingPeriod}
+👥 Age Limit: ${policy.ageLimit}
+
+**Key Benefits:**
+${policy.benefits.map(benefit => `• ${benefit}`).join('\n')}
+
+**Deductible:** ${policy.deductible}
+
+[CHOOSE_POLICY_BUTTON:${policy.id}]`
+              });
+            }, index * 1000);
+          });
+        } else {
+          addMessage({
+            type: 'ai',
+            content: response.message || 'Sorry, I couldn\'t find suitable insurance policies right now. Please try again later.'
+          });
+        }
+        setIsSearching(false);
+      }, 6000);
+    } catch (error) {
+      setIsSearching(false);
+      addMessage({
+        type: 'ai',
+        content: 'I encountered an issue while searching for insurance policies. Please try again.'
+      });
+    }
+  };
+
   const handleBookNow = (serviceId: string) => {
     const service = foundServices.find(s => s.id === serviceId);
     if (service) {
       setSelectedService(service);
       setShowMedicalForm(true);
+    }
+  };
+
+  const handleChoosePolicy = (policyId: string) => {
+    const policy = foundPolicies.find(p => p.id === policyId);
+    if (policy) {
+      setSelectedPolicy(policy);
+      setShowInsuranceForm(true);
     }
   };
 
@@ -191,6 +285,38 @@ You'll receive a confirmation email shortly. Is there anything else I can help y
   const handleMedicalFormCancel = () => {
     setShowMedicalForm(false);
     setSelectedService(null);
+  };
+
+  const handleInsuranceFormComplete = (details: InsuranceDetails) => {
+    setShowInsuranceForm(false);
+    setSelectedPolicy(null);
+    
+    // Add insurance confirmation message
+    addMessage({
+      type: 'ai',
+      content: `🎉 **Insurance Application Submitted Successfully!**
+
+Your health insurance plan is starting soon. Please complete the payment from the link provided in your email.
+
+**Policy Details:**
+📋 Policy: ${selectedPolicy?.name}
+🏢 Provider: ${selectedPolicy?.provider}
+🛡️ Coverage: ${selectedPolicy?.coverage}
+💰 Premium: ${selectedPolicy?.premium}
+👤 Applicant: ${details.fullName}
+
+**Next Steps:**
+1. Check your email for the payment link
+2. Complete the payment to activate your policy
+3. Your policy will be active within 24 hours
+
+Thank you for choosing ${selectedPolicy?.provider}! Is there anything else I can help you with?`
+    });
+  };
+
+  const handleInsuranceFormCancel = () => {
+    setShowInsuranceForm(false);
+    setSelectedPolicy(null);
   };
 
   const formatMessage = (content: string) => {
@@ -224,6 +350,29 @@ You'll receive a confirmation email shortly. Is there anything else I can help y
             >
               <BookOpen className="w-4 h-4" />
               Book Now
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    // Check for insurance policy button
+    const policyButtonMatch = content.match(/\[CHOOSE_POLICY_BUTTON:([^\]]+)\]/);
+    if (policyButtonMatch) {
+      const policyId = policyButtonMatch[1];
+      const policy = foundPolicies.find(p => p.id === policyId);
+      const contentWithoutButton = content.replace(/\[CHOOSE_POLICY_BUTTON:[^\]]+\]/, '');
+      
+      return (
+        <div>
+          <div dangerouslySetInnerHTML={{ __html: formatLine(contentWithoutButton) }} />
+          {policy && (
+            <button
+              onClick={() => handleChoosePolicy(policyId)}
+              className="mt-3 bg-blue-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2"
+            >
+              <BookOpen className="w-4 h-4" />
+              Choose This
             </button>
           )}
         </div>
@@ -439,6 +588,15 @@ You'll receive a confirmation email shortly. Is there anything else I can help y
           service={selectedService}
           onComplete={handleMedicalFormComplete}
           onCancel={handleMedicalFormCancel}
+        />
+      )}
+
+      {/* Insurance Details Form */}
+      {showInsuranceForm && selectedPolicy && (
+        <InsuranceDetailsForm
+          policy={selectedPolicy}
+          onComplete={handleInsuranceFormComplete}
+          onCancel={handleInsuranceFormCancel}
         />
       )}
     </div>

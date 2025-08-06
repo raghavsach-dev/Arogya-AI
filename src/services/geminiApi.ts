@@ -158,4 +158,103 @@ export class GeminiService {
       return "I'm experiencing some technical difficulties. Please try again in a moment.";
     }
   }
+
+  async searchInsurancePolicies(userInfo: any): Promise<any> {
+    const prompt = `You are Arogya AI, a medical assistant. A user is looking for health insurance policies.
+    User Info: Name: ${userInfo.name}, Age: ${userInfo.age}, Gender: ${userInfo.gender}
+    ${userInfo.currentSymptoms ? `Current Health Concerns: ${userInfo.currentSymptoms}` : ''}
+    ${userInfo.medicalHistory ? `Medical History: ${userInfo.medicalHistory}` : ''}
+    
+    IMPORTANT: You must respond with ONLY a valid JSON object, no other text. Generate realistic health insurance policies suitable for this user.
+    
+    {
+      "type": "insurance",
+      "message": "Found health insurance policies suitable for you",
+      "data": {
+        "policies": [
+          {
+            "id": "1",
+            "name": "Comprehensive Health Plus",
+            "provider": "HealthGuard Insurance",
+            "type": "Individual",
+            "coverage": "₹10,00,000",
+            "premium": "₹15,000/year",
+            "deductible": "₹5,000",
+            "benefits": ["Hospitalization", "Pre & Post Hospitalization", "Day Care Procedures", "Ambulance", "Health Checkups"],
+            "ageLimit": "18-65 years",
+            "waitingPeriod": "30 days",
+            "rating": 4.6
+          },
+          {
+            "id": "2",
+            "name": "Family Care Shield",
+            "provider": "MediSecure Ltd",
+            "type": "Family Floater",
+            "coverage": "₹15,00,000",
+            "premium": "₹22,000/year",
+            "deductible": "₹7,500",
+            "benefits": ["Family Coverage", "Maternity Benefits", "Critical Illness", "Mental Health", "Telemedicine"],
+            "ageLimit": "18-70 years",
+            "waitingPeriod": "45 days",
+            "rating": 4.8
+          },
+          {
+            "id": "3",
+            "name": "Basic Health Protect",
+            "provider": "SafeHealth Corp",
+            "type": "Individual",
+            "coverage": "₹5,00,000",
+            "premium": "₹8,500/year",
+            "deductible": "₹3,000",
+            "benefits": ["Basic Hospitalization", "Emergency Care", "Diagnostic Tests", "Pharmacy Benefits"],
+            "ageLimit": "18-60 years",
+            "waitingPeriod": "30 days",
+            "rating": 4.2
+          },
+          {
+            "id": "4",
+            "name": "Premium Health Elite",
+            "provider": "EliteHealth Insurance",
+            "type": "Individual",
+            "coverage": "₹25,00,000",
+            "premium": "₹35,000/year",
+            "deductible": "₹10,000",
+            "benefits": ["Worldwide Coverage", "Organ Transplant", "Cancer Treatment", "Preventive Care", "Wellness Programs"],
+            "ageLimit": "21-75 years",
+            "waitingPeriod": "90 days",
+            "rating": 4.9
+          }
+        ]
+      }
+    }`;
+    try {
+      const response = await this.makeRequest(prompt);
+      const cleanResponse = response.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '');
+      const parsedResponse = JSON.parse(cleanResponse);
+      return parsedResponse;
+    } catch (error) {
+      console.error('Search insurance error:', error);
+      return {
+        type: 'error',
+        message: 'Sorry, I couldn\'t find insurance policies right now. Please try again.',
+        data: {
+          policies: [
+            {
+              id: "fallback-1",
+              name: "Basic Health Insurance",
+              provider: "General Insurance Co",
+              type: "Individual",
+              coverage: "₹5,00,000",
+              premium: "₹12,000/year",
+              deductible: "₹5,000",
+              benefits: ["Hospitalization", "Emergency Care", "Diagnostic Tests"],
+              ageLimit: "18-65 years",
+              waitingPeriod: "30 days",
+              rating: 4.0
+            }
+          ]
+        }
+      };
+    }
+  }
 }

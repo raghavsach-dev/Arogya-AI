@@ -44,6 +44,31 @@ export interface MedicalDetails {
   emergencyContact: string;
 }
 
+export interface InsurancePolicy {
+  id: string;
+  name: string;
+  provider: string;
+  type: string;
+  coverage: string;
+  premium: string;
+  deductible: string;
+  benefits: string[];
+  ageLimit: string;
+  waitingPeriod: string;
+  rating: number;
+}
+
+export interface InsuranceDetails {
+  fullName: string;
+  dateOfBirth: string;
+  occupation: string;
+  annualIncome: string;
+  existingConditions: string;
+  familyMembers: number;
+  preferredCoverage: string;
+  contactPreference: string;
+}
+
 export interface GeminiResponse {
   type: 'services' | 'booking' | 'chat' | 'error';
   data?: any;
